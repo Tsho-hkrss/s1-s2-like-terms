@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Candy Algebra Match</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One&family=Nunito:wght@700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Nunito', sans-serif;
+            /* Sweet magical background */
+            background: linear-gradient(135deg, #fbc2eb 0%, #a6c1ee 50%, #c2e9fb 100%);
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            touch-action: none; /* Prevent zooming/scrolling on mobile */
+        }
+
+        .font-fredoka { font-family: 'Fredoka One', cursive; }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.4);
+            backdrop-filter: blur(10px);
+            border: 2px solid rgba(255, 255, 255, 0.6);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        #game-board {
+            width: 100%;
+            max-width: 450px;
+            aspect-ratio: 1 / 1;
+            position: relative;
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.2), 0 10px 30px rgba(0,0,0,0.2);
+            padding: 6px;
+            box-sizing: border-box;
+        }
+
+        .tile {
+            position: absolute;
+            width: 12.5%; /* 100% / 8 columns */
+            height: 12.5%;
+            padding: 3px;
+            box-sizing: border-box;
+            transition: top 0.3s ease-in-out, left 0.3s ease-in-out, transform 0.2s;
+            cursor: pointer;
+            user-select: none;
+            z-index: 10;
+        }
+
+        .tile.selected {
+            transform: scale(1.15);
+            z-index: 20;
+        }
+        
+        .tile.selected .candy {
+            box-shadow: 0 0 15px 5px rgba(255, 255, 255, 0.8);
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.2); }
+            100% { filter: brightness(1); }
+        }
+
+        .tile.popping {
+            transform: scale(1.2);
+            opacity: 0;
+            transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+        }
+
+        .candy {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            box-shadow: 0 6px 8px rgba(0,0,0,0.3), inset 0 -4px 6px rgba(0,0,0,0.2);
+            transition: all 0.2s;
+        }
+
+        /* The glossy reflection */
+        .candy::before {
+            content: '';
+            position: absolute;
+            top: 5%;
+            left: 15%;
+            width: 70%;
+            height: 35%;
+            background: linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 100%);
+            border-radius: 50%;
+            pointer-events: none;
+        }
+
+        .term-text {
+            font-size: clamp(0.9rem, 3.5vw, 1.3rem);
+            font-weight: 900;
+            color: white;
+            text-shadow: 
+                2px 2px 0 #000, 
+                -1px -1px 0 #000, 
+                1px -1px 0 #000, 
+                -1px 1px 0 #000, 
+                0px 3px 5px rgba(0,0,0,0.6);
+            z-index: 2;
+            pointer-events: none;
+            line-height: 1;
+        }
+
+        
+        /* 1. x terms: Red Rounded Square */
+        .candy-x {
+            background: radial-gradient(circle at 30% 30%, #ff4b72, #cc0033);
+            border-radius: 30%;
+        }
+
+        /* 2. y terms: Blue Circle */
+        .candy-y {
+            background: radial-gradient(circle at 30% 30%, #00d2ff, #3a7bd5);
+            border-radius: 50%;
+        }
+
+        /* 3. x² terms: Green Diamond */
+        .candy-x2 {
+            background: radial-gradient(circle at 50% 0%, #56ab2f, #a8e063);
+            clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+            /* Clip path removes box-shadow, simulate with filter on parent if needed, but keeping it simple */
+            box-shadow: none; 
+        }
+        .candy-x2::before {
+            top: 15%; left: 25%; width: 50%; height: 25%;
+        }
+
+        /* 4. Constants: Yellow Hexagon */
+        .candy-const {
+            background: radial-gradient(circle at 30% 30%, #ffd000, #ff8c00);
+            clip-path: polygon(25% 0%, 75% 0%, 100% 50%, 75% 100%, 25% 100%, 0% 50%);
+            box-shadow: none;
+        }
+        .candy-const::before {
+            top: 10%;
+        }
+
+        /* 5. xy terms: Purple Egg/Droplet */
+        .candy-xy {
+            background: radial-gradient(circle at 30% 30%, #e0c3fc, #8ec5fc); /* Base fallback */
+            background: radial-gradient(circle at 30% 30%, #b388ff, #7c4dff);
+            border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%; /* Egg shape */
+        }
+        
+    </style>
+</head>
+<body class="flex flex-col p-4 w-full h-full text-slate-800">
+
+    <div class="w-full max-w-[450px] flex flex-col gap-3 mx-auto">
+        
+        <!-- Header -->
+        <div class="glass-panel rounded-3xl p-4 text-center">
+            <h1 class="text-3xl font-fredoka text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 drop-shadow-sm mb-2">
+                Candy Algebra
+            </h1>
+            
+            <div class="flex justify-between items-center bg-white/50 rounded-2xl p-3 shadow-inner">
+                <div class="text-left">
+                    <div class="text-xs font-black uppercase text-purple-800 tracking-wider">Score</div>
+                    <div id="score" class="text-2xl font-fredoka text-pink-600">0</div>
+                </div>
+                <button onclick="resetGame()" class="bg-gradient-to-b from-purple-400 to-purple-600 hover:from-purple-500 hover:to-purple-700 text-white px-5 py-2 rounded-full text-sm font-bold shadow-[0_4px_0_#4a148c] active:translate-y-[4px] active:shadow-none transition-all">
+                    Restart
+                </button>
+            </div>
+        </div>
+
+        <!-- The Grid -->
+        <div id="game-board">
+            <!-- Tiles injected by JS -->
+        </div>
+
+        <!-- Legend / Instructions -->
+        <div class="glass-panel rounded-2xl p-3 flex flex-wrap justify-center gap-2 shadow-md">
+            <div class="flex items-center gap-1 text-xs font-bold"><div class="w-4 h-4 candy-x rounded-sm"></div> x</div>
+            <div class="flex items-center gap-1 text-xs font-bold"><div class="w-4 h-4 candy-y rounded-full"></div> y</div>
+            <div class="flex items-center gap-1 text-xs font-bold"><div class="w-4 h-4 candy-x2" style="clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%)"></div> x²</div>
+            <div class="flex items-center gap-1 text-xs font-bold"><div class="w-4 h-4 candy-const" style="clip-path: polygon(25% 0, 75% 0, 100% 50%, 75% 100%, 25% 100%, 0 50%)"></div> #</div>
+            <div class="flex items-center gap-1 text-xs font-bold"><div class="w-4 h-4 candy-xy" style="border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%"></div> xy</div>
+        </div>
+    </div>
+
+    <script>
+        const BOARD_SIZE = 8;
+        const TILE_SIZE_PC = 100 / BOARD_SIZE;
+        
+        // Families map to specific CSS classes
+        const FAMILIES = ['x', 'y', 'x2', 'const', 'xy']; 
+        
+        let board = [];
+        let score = 0;
+        let selectedTile = null;
+        let isAnimating = false;
+        let startX, startY, sourceTile;
+
+        const boardEl = document.getElementById('game-board');
+        const scoreEl = document.getElementById('score');
+
+        function getRandomTerm() {
+            const family = FAMILIES[Math.floor(Math.random() * FAMILIES.length)];
+            
+            // Random coefficient from -5 to 5, excluding 0
+            let coeff;
+            do {
+                coeff = Math.floor(Math.random() * 11) - 5;
+            } while (coeff === 0);
+
+            let text = "";
+            if (family === 'const') {
+                text = `${coeff}`;
+            } else {
+                let baseText = family === 'x2' ? 'x²' : family;
+                if (coeff === 1) text = baseText;
+                else if (coeff === -1) text = `-${baseText}`;
+                else text = `${coeff}${baseText}`;
+            }
+
+            return { family, text };
+        }
+
+        function initBoard() {
+            board = [];
+            boardEl.innerHTML = '';
+            score = 0;
+            scoreEl.innerText = score;
+            selectedTile = null;
+            
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                board[x] = [];
+                for (let y = 0; y < BOARD_SIZE; y++) {
+                    let termData;
+                    // Prevent matches on initial spawn
+                    do {
+                        termData = getRandomTerm();
+                    } while (createsInitialMatch(x, y, termData.family));
+                    
+                    board[x][y] = createTileElement(x, y, termData);
+                }
+            }
+        }
+
+        function createsInitialMatch(x, y, family) {
+            if (x >= 2 && board[x-1][y].family === family && board[x-2][y].family === family) return true;
+            if (y >= 2 && board[x][y-1].family === family && board[x][y-2].family === family) return true;
+            return false;
+        }
+
+        function createTileElement(x, y, termData) {
+            const el = document.createElement('div');
+            el.className = 'tile';
+            
+            const candy = document.createElement('div');
+            candy.className = `candy candy-${termData.family}`;
+            
+            const textSpan = document.createElement('span');
+            textSpan.className = 'term-text';
+            textSpan.innerText = termData.text;
+            
+            candy.appendChild(textSpan);
+            el.appendChild(candy);
+            boardEl.appendChild(el);
+            
+            const tileObj = { x, y, family: termData.family, element: el };
+            updateTilePosition(tileObj, x, y);
+            
+            return tileObj;
+        }
+
+        function updateTilePosition(tileObj, logicalX, logicalY) {
+            tileObj.x = logicalX;
+            tileObj.y = logicalY;
+            tileObj.element.style.left = `${logicalX * TILE_SIZE_PC}%`;
+            tileObj.element.style.top = `${logicalY * TILE_SIZE_PC}%`;
+        }
+
+        boardEl.addEventListener('pointerdown', (e) => {
+            if (isAnimating) return;
+            let el = e.target.closest('.tile');
+            if (!el) return;
+
+            let x = Math.round(parseFloat(el.style.left) / TILE_SIZE_PC);
+            let y = Math.round(parseFloat(el.style.top) / TILE_SIZE_PC);
+            
+            sourceTile = board[x][y];
+            if(!sourceTile) return;
+
+            startX = e.clientX;
+            startY = e.clientY;
+            
+            el.classList.add('scale-90');
+            el.setPointerCapture(e.pointerId);
+        });
+
+        boardEl.addEventListener('pointerup', (e) => {
+            if (isAnimating || !sourceTile) return;
+            
+            sourceTile.element.classList.remove('scale-90');
+            
+            let endX = e.clientX;
+            let endY = e.clientY;
+            let dx = endX - startX;
+            let dy = endY - startY;
+            
+            let threshold = 30; // Drag distance for swipe
+            
+            if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+                // Swipe Action
+                let targetX = sourceTile.x;
+                let targetY = sourceTile.y;
+                
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    dx > 0 ? targetX++ : targetX--;
+                } else {
+                    dy > 0 ? targetY++ : targetY--;
+                }
+                
+                if (targetX >= 0 && targetX < BOARD_SIZE && targetY >= 0 && targetY < BOARD_SIZE) {
+                    attemptSwap(sourceTile, board[targetX][targetY]);
+                }
+                
+                if (selectedTile) {
+                    selectedTile.element.classList.remove('selected');
+                    selectedTile = null;
+                }
+            } else {
+                // Click Action
+                if (!selectedTile) {
+                    selectedTile = sourceTile;
+                    selectedTile.element.classList.add('selected');
+                } else {
+                    let isAdjacent = (Math.abs(selectedTile.x - sourceTile.x) + Math.abs(selectedTile.y - sourceTile.y)) === 1;
+                    selectedTile.element.classList.remove('selected');
+                    
+                    if (isAdjacent) {
+                        attemptSwap(selectedTile, sourceTile);
+                    } else if (selectedTile !== sourceTile) {
+                        selectedTile = sourceTile;
+                        selectedTile.element.classList.add('selected');
+                        return;
+                    }
+                    selectedTile = null;
+                }
+            }
+            sourceTile = null;
+        });
+
+        function attemptSwap(tile1, tile2) {
+            if(!tile1 || !tile2) return;
+            isAnimating = true;
+
+            let x1 = tile1.x, y1 = tile1.y;
+            let x2 = tile2.x, y2 = tile2.y;
+            
+            board[x1][y1] = tile2;
+            board[x2][y2] = tile1;
+            
+            updateTilePosition(tile1, x2, y2);
+            updateTilePosition(tile2, x1, y1);
+
+            setTimeout(() => {
+                let matches = findMatches();
+                
+                if (matches.length > 0) {
+                    processMatches(matches);
+                } else {
+                    // Invalid move, swap back
+                    board[x1][y1] = tile1;
+                    board[x2][y2] = tile2;
+                    updateTilePosition(tile1, x1, y1);
+                    updateTilePosition(tile2, x2, y2);
+                    setTimeout(() => { isAnimating = false; }, 300);
+                }
+            }, 300);
+        }
+
+        function findMatches() {
+            let matchedCoords = new Set(); 
+
+            // Horizontal
+            for (let y = 0; y < BOARD_SIZE; y++) {
+                for (let x = 0; x < BOARD_SIZE - 2; x++) {
+                    if (!board[x][y]) continue;
+                    let matchFamily = board[x][y].family;
+                    
+                    if (board[x+1][y] && board[x+1][y].family === matchFamily &&
+                        board[x+2][y] && board[x+2][y].family === matchFamily) {
+                        
+                        matchedCoords.add(`${x},${y}`);
+                        matchedCoords.add(`${x+1},${y}`);
+                        matchedCoords.add(`${x+2},${y}`);
+                        
+                        let k = 3;
+                        while (x+k < BOARD_SIZE && board[x+k][y] && board[x+k][y].family === matchFamily) {
+                            matchedCoords.add(`${x+k},${y}`);
+                            k++;
+                        }
+                    }
+                }
+            }
+
+            // Vertical
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                for (let y = 0; y < BOARD_SIZE - 2; y++) {
+                    if (!board[x][y]) continue;
+                    let matchFamily = board[x][y].family;
+                    
+                    if (board[x][y+1] && board[x][y+1].family === matchFamily &&
+                        board[x][y+2] && board[x][y+2].family === matchFamily) {
+                        
+                        matchedCoords.add(`${x},${y}`);
+                        matchedCoords.add(`${x},${y+1}`);
+                        matchedCoords.add(`${x},${y+2}`);
+                        
+                        let k = 3;
+                        while (y+k < BOARD_SIZE && board[x][y+k] && board[x][y+k].family === matchFamily) {
+                            matchedCoords.add(`${x},${y+k}`);
+                            k++;
+                        }
+                    }
+                }
+            }
+
+            return Array.from(matchedCoords).map(str => {
+                let parts = str.split(',');
+                return { x: parseInt(parts[0]), y: parseInt(parts[1]) };
+            });
+        }
+
+        function processMatches(matches) {
+            const matchCount = matches.length;
+            score += matchCount * 10 + (matchCount > 3 ? (matchCount - 3) * 20 : 0);
+            scoreEl.innerText = score;
+
+            // Animate pop
+            matches.forEach(coord => {
+                let tile = board[coord.x][coord.y];
+                if (tile) {
+                    tile.element.classList.add('popping');
+                    setTimeout(() => { tile.element.remove(); }, 200); 
+                    board[coord.x][coord.y] = null;
+                }
+            });
+
+            // Cascade
+            setTimeout(() => {
+                applyGravity();
+                setTimeout(() => {
+                    refillEmptySpaces();
+                    setTimeout(() => {
+                        let newMatches = findMatches();
+                        if (newMatches.length > 0) {
+                            processMatches(newMatches); 
+                        } else {
+                            isAnimating = false; 
+                        }
+                    }, 400); 
+                }, 300);
+            }, 250); 
+        }
+
+        function applyGravity() {
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                let emptyCount = 0;
+                for (let y = BOARD_SIZE - 1; y >= 0; y--) {
+                    if (board[x][y] === null) {
+                        emptyCount++;
+                    } else if (emptyCount > 0) {
+                        let newY = y + emptyCount;
+                        board[x][newY] = board[x][y];
+                        board[x][y] = null;
+                        updateTilePosition(board[x][newY], x, newY);
+                    }
+                }
+            }
+        }
+
+        function refillEmptySpaces() {
+            let newlyCreated = [];
+            for (let x = 0; x < BOARD_SIZE; x++) {
+                let emptyCount = 0;
+                for (let y = 0; y < BOARD_SIZE; y++) {
+                    if (board[x][y] === null) emptyCount++;
+                }
+
+                for (let y = 0; y < BOARD_SIZE; y++) {
+                    if (board[x][y] === null) {
+                        let termData = getRandomTerm();
+                        let spawnY = y - emptyCount; // Spawn above board
+                        let tileObj = createTileElement(x, spawnY, termData);
+                        board[x][y] = tileObj;
+                        newlyCreated.push(tileObj);
+                    }
+                }
+            }
+
+            boardEl.offsetHeight; // Force DOM reflow
+
+            newlyCreated.forEach(tile => {
+                let targetY = board[tile.x].indexOf(tile);
+                updateTilePosition(tile, tile.x, targetY);
+            });
+        }
+
+        function resetGame() {
+            if (isAnimating) return;
+            initBoard();
+        }
+
+        window.onload = initBoard;
+    </script>
+</body>
+</html>
